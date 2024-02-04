@@ -275,9 +275,13 @@ kbase_ipa_control_rate_change_notify(struct kbase_clk_rate_listener *listener,
 		spin_lock_irqsave(&kbdev->hwaccess_lock, flags);
 
 		if (!kbdev->pm.backend.gpu_ready) {
-			dev_err(kbdev->dev,
-				"%s: GPU frequency cannot change while GPU is off",
-				__func__);
+			dev_vdbg(kbdev->dev,
+				"%s: backup clk rate:%u change while gpu power off", __func__,
+				clk_rate_hz);
+			/* Backup clk rate value and update timer at next power on */
+			spin_lock(&ipa_ctrl->lock);
+			ipa_ctrl->cur_gpu_rate = clk_rate_hz;
+			spin_unlock(&ipa_ctrl->lock);
 			spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 			return;
 		}
@@ -312,6 +316,21 @@ kbase_ipa_control_rate_change_notify(struct kbase_clk_rate_listener *listener,
 
 		spin_unlock_irqrestore(&kbdev->hwaccess_lock, flags);
 	}
+}
+
+static
+int kbase_ipa_control_rate_change_notify_ex(struct kbase_device *kbdev,
+					       u32 clk_index, u32 clk_rate_hz)
+{
+
+	struct kbase_ipa_control *ipa_ctrl = &kbdev->csf.ipa_control;
+	struct kbase_ipa_control_listener_data *listener_data =
+		ipa_ctrl->rtm_listener_data;
+
+	kbase_ipa_control_rate_change_notify(&listener_data->listener,
+					     clk_index, clk_rate_hz * 1000);
+
+	return 0;
 }
 
 void kbase_ipa_control_init(struct kbase_device *kbdev)
@@ -353,6 +372,8 @@ void kbase_ipa_control_init(struct kbase_device *kbdev)
 		kbase_clk_rate_trace_manager_subscribe_no_lock(
 			clk_rtm, &listener_data->listener);
 	spin_unlock(&clk_rtm->lock);
+
+	mtk_common_rate_change_notify_fp = kbase_ipa_control_rate_change_notify_ex;
 }
 KBASE_EXPORT_TEST_API(kbase_ipa_control_init);
 

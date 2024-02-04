@@ -135,3 +135,31 @@ void mtk_common_cal_gpu_utilization(unsigned int *pui32Loading,
 #endif /* MALI_USE_CSF */
 }
 #endif
+
+int (*mtk_common_rate_change_notify_fp)(struct kbase_device *kbdev,
+					       u32 clk_index, u32 clk_rate_hz) = NULL;
+
+EXPORT_SYMBOL(mtk_common_rate_change_notify_fp);
+
+void MTKGPUFreq_change_notify(u32 clk_idx, u32 gpufreq)
+{
+	struct kbase_device *kbdev = (struct kbase_device *)mtk_common_get_kbdev();
+
+	if (mtk_common_rate_change_notify_fp && !IS_ERR_OR_NULL(kbdev))
+		mtk_common_rate_change_notify_fp(kbdev, clk_idx, gpufreq);
+}
+
+#if IS_ENABLED(CONFIG_MALI_MIDGARD_DVFS) && IS_ENABLED(CONFIG_MALI_MTK_DVFS_POLICY)
+int mtk_set_core_mask(u64 core_mask)
+{
+	struct kbase_device *kbdev = (struct kbase_device *)mtk_common_get_kbdev();
+	int ret = 0;
+
+	kbase_devfreq_set_core_mask(kbdev, core_mask);
+
+	/* TODO: need to check get_core_mask hang issue, to verity the scaling result */
+	// current_mask = kbdev->pm.backend.ca_cores_enabled;
+
+	return ret;
+}
+#endif
